@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nueva Venta</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background-color: #12181b;
+        color: #b2bec3;
+      }
+      .card {
+        background-color: #1a2327;
+        border: none;
+      }
+      .form-control,
+      .form-select {
+        background-color: #2d373c;
+        color: white;
+        border: 1px solid #4f5d64;
+      }
+      .form-control:focus,
+      .form-select:focus {
+        background-color: #2d373c;
+        color: white;
+        border-color: #2ecc71;
+        box-shadow: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container my-5" style="max-width: 900px">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-white fw-bold">Registrar Nueva Venta</h2>
+        <a
+          href="{% url 'panel_ventas' %}"
+          class="btn btn-outline-secondary btn-sm"
+          >⬅ Volver al Panel</a
+        >
+      </div>
+
+      <div class="card p-4 shadow">
+        <form id="form-venta">
+          {% csrf_token %}
+
+          <div class="row mb-4">
+            <div class="col-md-4">
+              <label class="form-label text-white fw-bold">Cliente</label>
+              <select id="cliente" class="form-select">
+                <option value="">-- Consumidor Final --</option>
+                {% for c in clientes %}
+                <option value="{{ c.id }}">{{ c.nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label text-white fw-bold"
+                >Condición de Venta</label
+              >
+              <select
+                id="condicion"
+                class="form-select"
+                onchange="alternarCuotas(this.value)"
+              >
+                <option value="CONTADO">Contado</option>
+                <option value="CREDITO">Crédito / Cuotas</option>
+              </select>
+            </div>
+            <div class="col-md-4" id="div-cuotas" style="display: none">
+              <label class="form-label text-white fw-bold"
+                >Cantidad de Cuotas</label
+              >
+              <input
+                type="number"
+                id="cuotas"
+                class="form-control"
+                value="1"
+                min="1"
+              />
+            </div>
+          </div>
+
+          <hr class="border-secondary my-4" />
+
+          <h4 class="text-info mb-3">Productos de la Venta</h4>
+          <div id="contenedor-productos">
+            <div class="row g-2 mb-2 fila-producto">
+              <div class="col-md-7">
+                <select
+                  class="form-select select-producto"
+                  onchange="actualizarPrecioFila(this)"
+                >
+                  <option value="">-- Seleccionar Producto --</option>
+                  {% for p in productos %}
+                  <option
+                    value="{{ p.id }}"
+                    data-precio="{{ p.precio }}"
+                    data-stock="{{ p.stock }}"
+                  >
+                    {{ p.nombre }} (Stock: {{ p.stock }}) - ${{ p.precio }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-2">
+                <input
+                  type="number"
+                  class="form-control cantidad-producto"
+                  value="1"
+                  min="1"
+                  onchange="recalcularTotalGeneral()"
+                />
+              </div>
+              <div class="col-md-2">
+                <input
+                  type="text"
+                  class="form-control text-end subtotal-fila"
+                  value="$0.00"
+                  readonly
+                />
+              </div>
+              <div class="col-md-1">
+                <button
+                  type="button"
+                  class="btn btn-danger w-100"
+                  onclick="eliminarFila(this)"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            class="btn btn-outline-info btn-sm mt-2"
+            onclick="agregarFila()"
+          >
+            + Agregar Otro Producto
+          </button>
+
+          <div
+            class="d-flex justify-content-end align-items-center mt-5 p-3 bg-dark rounded"
+          >
+            <h4 class="text-white me-3 mb-0">TOTAL A COBRAR:</h4>
+            <span id="total-general" class="fs-3 fw-bold text-success"
+              >$0.00</span
+            >
+          </div>
+
+          <div class="mt-4 d-flex justify-content-end">
+            <button
+              type="button"
+              class="btn btn-success fw-bold px-5 py-2"
+              onclick="enviarVenta()"
+            >
+              💾 Confirmar y Guardar Venta
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      function alternarCuotas(valor) {
+        document.getElementById("div-cuotas").style.display =
+          valor === "CREDITO" ? "block" : "none";
+      }
+
+      function agregarFila() {
+        let contenedor = document.getElementById("contenedor-productos");
+        let nuevaFila = contenedor.children[0].cloneNode(true);
+        nuevaFila.querySelector(".select-producto").value = "";
+        nuevaFila.querySelector(".cantidad-producto").value = 1;
+        nuevaFila.querySelector(".subtotal-fila").value = "$0.00";
+        contenedor.appendChild(nuevaFila);
+      }
+
+      function eliminarFila(boton) {
+        let filas = document.querySelectorAll(".fila-producto");
+        if (filas.length > 1) {
+          boton.closest(".fila-producto").remove();
+          recalcularTotalGeneral();
+        }
+      }
+
+      function actualizarPrecioFila(select) {
+        let fila = select.closest(".fila-producto");
+        let opcion = select.options[select.selectedIndex];
+        let cantidadInput = fila.querySelector(".cantidad-producto");
+
+        if (opcion.value) {
+          let stockMax = opcion.getAttribute("data-stock");
+          cantidadInput.setAttribute("max", stockMax);
+        }
+        recalcularTotalGeneral();
+      }
+
+      function recalcularTotalGeneral() {
+        let total = 0;
+        document.querySelectorAll(".fila-producto").forEach((fila) => {
+          let select = fila.querySelector(".select-producto");
+          let cantidad =
+            parseInt(fila.querySelector(".cantidad-producto").value) || 0;
+          let opcion = select.options[select.selectedIndex];
+
+          if (opcion && opcion.value) {
+            let precio = parseFloat(opcion.getAttribute("data-precio"));
+            let subtotal = precio * cantidad;
+            fila.querySelector(".subtotal-fila").value =
+              `$${subtotal.toFixed(2)}`;
+            total += subtotal;
+          }
+        });
+        document.getElementById("total-general").innerText =
+          `$${total.toFixed(2)}`;
+      }
+
+      function enviarVenta() {
+        let items = [];
+        let valido = true;
+
+        document.querySelectorAll(".fila-producto").forEach((fila) => {
+          let productoId = fila.querySelector(".select-producto").value;
+          let cantidad = fila.querySelector(".cantidad-producto").value;
+
+          if (productoId) {
+            items.push({ producto_id: productoId, cantidad: cantidad });
+          }
+        });
+
+        if (items.length === 0) {
+          alert("Selecciona al menos un producto válido.");
+          return;
+        }
+
+        let datos = {
+          cliente_id: document.getElementById("cliente").value,
+          condicion: document.getElementById("condicion").value,
+          cuotas: document.getElementById("cuotas").value,
+          items: items,
+        };
+
+        fetch("{% url 'crear_venta' %}", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]")
+              .value,
+          },
+          body: JSON.stringify(datos),
+        })
+          .then((res) => res.json())
+          .then((res) => {
+            if (res.success) {
+              alert("¡Venta registrada exitosamente!");
+              window.location.href = "{% url 'panel_ventas' %}";
+            } else {
+              alert("Error: " + res.error);
+            }
+          });
+      }
+    </script>
+  </body>
+</html>

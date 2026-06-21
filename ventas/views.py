@@ -1,13 +1,19 @@
-from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, render
+import json
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import login_required
+from django.utils import timezone
+
+# Componentes de ReportLab para el PDF
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from .models import Venta, Cuota
-from django.contrib.auth.decorators import login_required
-from django.utils import timezone
+
+# Tus modelos
+from .models import Venta, Cuota, Cliente, Producto, DetalleVenta
+
 
 @login_required
 def panel_ventas(request):
@@ -39,6 +45,55 @@ def panel_ventas(request):
         'cuotas_pendientes': cuotas_pendientes
     }
     return render(request, 'ventas/panel.html', context)
+
+
+@login_required
+def crear_venta_ajax(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            cliente_id = data.get('cliente_id')
+            condicion = data.get('condicion')
+            cuotas = int(data.get('cuotas', 1))
+            items = data.get('items', [])  # Lista de productos y cantidades
+
+            if not items:
+                return JsonResponse({'success': False, 'error': 'Debe agregar al menos un producto.'})
+
+            # 1. Obtener Cliente
+            cliente = Cliente.objects.get(id=cliente_id) if cliente_id else None
+
+            # 2. Crear la Venta base
+            venta = Venta.objects.create(
+                cliente=cliente,
+                condicion=condicion,
+                cantidad_cuotas=cuotas if condicion == 'CREDITO' else 1,
+                estado='PENDIENTE'
+            )
+
+            # 3. Registrar los detalles y restar stock
+            for item in items:
+                producto = Producto.objects.get(id=item['producto_id'])
+                cantidad = int(item['cantidad'])
+
+                DetalleVenta.objects.create(
+                    venta=venta,
+                    producto=producto,
+                    cantidad=cantidad,
+                    precio_unitario=producto.precio  # Tomamos el precio actual del producto
+                )
+
+            # El método save() o las señales que tienes configuradas calcularán el total y las cuotas automáticamente
+            return JsonResponse({'success': True, 'venta_id': venta.id})
+
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    # Si es petición GET, enviamos los datos para estructurar el HTML selectivo
+    clientes = Cliente.objects.all()
+    productos = Producto.objects.filter(stock__gt=0)  # Solo los que tengan stock disponible
+    return render(request, 'ventas/nueva_venta.html', {'clientes': clientes, 'productos': productos})
+
 
 @staff_member_required
 def descargar_pdf_venta(request, venta_id):
