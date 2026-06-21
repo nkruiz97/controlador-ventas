@@ -1,0 +1,19 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Configuración de editores (VS Code, PyCharm, etc.)
+.vscode/
+.idea/
+
+# Base de datos local (Opcional: déjala si quieres que tus pruebas actuales vayan a GitHub, quítala si quieres que inicie limpia en la nube)
+# db.sqlite3
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
